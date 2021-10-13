@@ -1,0 +1,11 @@
+sources:
+  ecmwf_temperature_rcp8.5:
+    description: climate historical temperature data from ECMWF with RCP8.5
+    driver: netcdf
+    args:
+      urlpath: '{{ CATALOG_DIR }}/data/temperature_monthly-mean_ipsl-cm5a-lr_rcp85_r1i1p1_1950-2100_v1.0.nc'
+  ecmwf_temperature_rcp4.5:
+    description: climate historical temperature data from ECMWF with RCP4.5
+    driver: netcdf
+    args:
+      urlpath: '{{ CATALOG_DIR }}/data/temperature_monthly-mean_ipsl-cm5a-lr_rcp45_r1i1p1_1950-2100_v1.0.nc'

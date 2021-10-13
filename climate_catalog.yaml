@@ -1,0 +1,21 @@
+sources:
+  historical:
+    args:
+      urlpath: data/temperature_0_19500101_20210101.zarr
+    description: historical temperature from 19500101 to 20210101
+    driver: intake_xarray.xzarr.ZarrSource
+    metadata: {}
+
+  prediction RCP 4.5:
+    args:
+      urlpath: data/temperature_4.5_20210101_21000112.zarr
+    description: prediction RCP 4.5 temperature from 20210101 to 21000112
+    driver: intake_xarray.xzarr.ZarrSource
+    metadata: {}
+
+  prediction RCP 8.5:
+    args:
+      urlpath: data/temperature_8.5_20210101_21000112.zarr
+    description: prediction RCP 8.5 temperature from 20210101 to 21000112
+    driver: intake_xarray.xzarr.ZarrSource
+    metadata: {}

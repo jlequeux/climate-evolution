@@ -1,120 +1,124 @@
+from logging import disable
 import streamlit as st
 
 import xarray as xr
 import pandas as pd
-import matplotlib.pyplot as plt
 import datetime
 import numpy as np
+import geopy
 from geopy.geocoders import Nominatim
-import altair as alt
-import cartopy.crs as ccrs
+import intake
+
+import plot
+import paths
 
 GEOLOCATOR = Nominatim(user_agent="climate-evolution")    
 
-DATA_FOLDER = 'data'
+
+VARIABLES = ['temperature', 'precipitation']
 YEAR_NOW = datetime.datetime.now().year
+RCPs = ['4.5', '8.5']
 
 
-# @st.cache
-def get_yearly_temperature():
-    ds = xr.open_dataset(f'{DATA_FOLDER}/temperature_monthly-mean_ipsl-cm5a-lr_rcp45_r1i1p1_1950-2100_v1.0.nc')
-    ds = ds.rename_vars({'temperature_monthly-mean': 'temperature'})
-    ds['temperature'] = ds['temperature'] - 273.15
-    return ds.groupby('time.year').mean()['temperature']
-    
+def get_dataset():
+    """Get and concatenate datasets from the catalog"""
+    catalog = intake.open_catalog(paths.CLIMATE_CATALOG)
+    arrays = []
+    arrays.append(catalog['historical'].read())
+    _ = [arrays.append(catalog[f'prediction RCP {rcp}'].read()) for rcp in RCPs]
+    return xr.concat(arrays, 'RCP')
 
-def temperature_evolution_per_location():
-    city = st.text_input('Enter you city')
-    if not city:
+
+def get_location(query):
+    if not query:
+        return False
+    try:
+        return GEOLOCATOR.geocode(query)
+    except geopy.exc.GeocoderServiceError as e:
+        st.text(f'Error in geocoding: {e}')
+        return False
+
+
+def climate_evolution_per_location():
+    """Show temperature evolution for a location"""
+    # TODO(jeremie): add other variables
+    variable='temperature'
+
+    query = st.text_input('Enter you city or country')
+    location = get_location(query)
+    if not location:
         return
-    location = GEOLOCATOR.geocode(city)
-    st.text(f"showing temperature for {location.address}")
+
+    st.text(f"showing {variable} for {location.address}")
     rolling = st.slider('Rolling window (years)', min_value=1, max_value=10)
 
-    yearly_temperature = get_yearly_temperature()
     ds_location = (
-        yearly_temperature
+        get_dataset()
         .sel(latitude=location.latitude, longitude=location.longitude, method="nearest")
         .rolling(year=rolling).mean()
     )
     df = ds_location.to_dataframe().reset_index()
 
-    df.loc[df['year'] <= YEAR_NOW,'type'] = 'historical'
-    df.loc[df['year'] > YEAR_NOW,'type'] = 'predictions'
-    df = df[['year', 'temperature', 'type']].dropna()
+    df.loc[df['RCP'] == '0','type'] = 'historical'
+    for rcp in RCPs:
+        df.loc[df['RCP'] == rcp,'type'] = f'prediction - RCP {rcp}'  
+
+    df = df.dropna()
     df['year'] = pd.to_datetime(df['year'], format='%Y')
     df = df.sort_values('year', ascending=True)
-
-    p = (
-        alt.Chart(df)
-        .mark_line()
-        .encode(
-            alt.Y('temperature', scale=alt.Scale(zero=False)),
-            x='year',)
-    )
-    trend = p.transform_regression('year', 'temperature').mark_line(strokeDash=[2,1], color='steerblue')
-    p = p.encode(
-        color=alt.Color('type', 
-            scale=alt.Scale(
-                scheme='set2',
-                #domain=['historical', 'predictions'], range=['steerblue', 'peachpuff']
-                )
-            ), 
-        tooltip=['year', 'temperature'])
-    chart = (
-        (trend + p)
-        .interactive()
-        .properties(width=800)
-    )
     
-    st.altair_chart(chart)
+    st.altair_chart(plot.line(df, variable))
 
-    tmp_past = df.iloc[0]['temperature']
+    tmp_past = df.iloc[0][variable]
     year_past = df.iloc[0]['year']
-    tmp_now = df.loc[df['year'] <= f'{YEAR_NOW}-01-01'].iloc[-1]['temperature']
-    year_now = df.loc[df['year'] <= f'{YEAR_NOW}-01-01'].iloc[-1]['year']
-    tmp_futur = df.iloc[-1]['temperature']
-    year_futur = df.iloc[-1]['year']
+    tmp_now = df.query(f'RCP == "0"').iloc[-1][variable]
+    year_now = df.query(f'RCP == "0"').iloc[-1]['year']
     difference_now = tmp_now - tmp_past
-    difference_futur = tmp_futur - tmp_now
-
-    st.text(f'In {year_now.year} the temperature is {difference_now:.02f}°C {"higher" if difference_now > 0 else "lower"} than in {year_past.year}')
-    st.text(f'In {year_futur.year} the temperature will be {difference_futur:.02f}°C {"higher" if difference_futur > 0 else "lower"} than in {year_now.year}')
-    st.text(f'Total difference from {year_past.year} to {year_futur.year}: {difference_now+difference_futur:.02f}°C')
+    st.text(f'In {year_now.year} the {variable} is {difference_now:.02f}°C'
+            f'{"higher" if difference_now > 0 else "lower"} than in {year_past.year}')
+    
+    for rcp in RCPs:
+        tmp_futur = df.query(f'RCP == "{rcp}"').iloc[-1][variable]
+        year_futur = df.query(f'RCP == "{rcp}"').iloc[-1]['year']
+        difference_futur = tmp_futur - tmp_now
+        st.text(f'With scenario RCP{rcp}: in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
+                f' {"higher" if difference_futur > 0 else "lower"} compared to {year_now.year}')
 
 
 def temperature_anomalies():
-    yearly_temperature = get_yearly_temperature()
+    """Show temperature anomalies between 2 dates"""
+
+    # TODO(jeremie): add spatial selection
+    catalog = intake.open_catalog(paths.CLIMATE_CATALOG)
+    historical_temperatures = catalog['historical'].read()
+
     st.text('Show temperature anomalies between:')
-    year_now_index = int(np.where(yearly_temperature.year==YEAR_NOW)[0])
-    reference_year = st.selectbox('Reference date: ', yearly_temperature.year.values, index=year_now_index)
-    comparison_year = st.selectbox('Anomalies with: ', yearly_temperature.year.values)
+
+    hist_last_year_idx = (len(historical_temperatures.year.values) - 1)
+    reference_year = st.selectbox('Historical data from: ', historical_temperatures.year.values, index=hist_last_year_idx)
+
+    rcp_model = st.selectbox('RCP model', RCPs)
+    prediction_data = catalog[f'prediction RCP {rcp_model}'].read()
+    pred_last_year_idx = (len(prediction_data.year.values) - 1)
+    comparison_year = st.selectbox('Predictions from: ', prediction_data.year.values, index=pred_last_year_idx)
     
-    reference_tmp_map = yearly_temperature.sel(year=reference_year, method='nearest')
-    comparison_tmp_map = yearly_temperature.sel(year=comparison_year, method='nearest')
-    anomaly_map = reference_tmp_map - comparison_tmp_map
+    reference_tmp_map = historical_temperatures.sel(year=reference_year, method='nearest')
+    comparison_tmp_map = prediction_data.sel(year=comparison_year, method='nearest')
+  
+    sign = -1 if st.checkbox('Reverse difference') else 1
+    anomaly_map = sign * comparison_tmp_map - sign * reference_tmp_map
 
-    p = anomaly_map.plot(subplot_kws={'projection': ccrs.PlateCarree()}, add_colorbar=False)
-    p.axes.coastlines()
-    p.figure.patch.set_alpha(0)
-
-    fg_color = 'white'
-    cbar = p.figure.colorbar(p, orientation="horizontal", pad=0.2)
-    cbar.set_label("Temperature anomalies(°C)")
-    cbar.set_label("Temperature anomalies(°C)", color=fg_color)
-    cbar.ax.xaxis.set_tick_params(color=fg_color)
-    plt.setp(plt.getp(cbar.ax.axes, 'xticklabels'), color=fg_color)
-    # cbar.outline.set_edgecolor(fg_color)
+    qualitative_coolwarm = plot.create_qualitative_from_linear('coolwarm', 12)
+    p = plot.map(anomaly_map['temperature'], label="Temperature anomalies(°C)", cmap=qualitative_coolwarm)
     
     st.pyplot(p.figure)
-    
 
 
-OPTIONS = {'Temperature evolution at your location': temperature_evolution_per_location,
-           'Temperature Anomalies': temperature_anomalies}
+OPTIONS = {'Temperature evolution at your location': climate_evolution_per_location,
+           'Map of temperature anomalies': temperature_anomalies}
 
 
 if __name__ == '__main__':
-    service = st.sidebar.selectbox('What do you want to see?', OPTIONS.keys())
+    service = st.sidebar.selectbox('What do you want to see?', list(OPTIONS.keys()))
     st.title(service)
     OPTIONS[service]()

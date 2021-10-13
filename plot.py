@@ -24,7 +24,7 @@ def color_map(ds, label, cmap):
         cmap=cmap,
         subplot_kws=subplot_kws,
         add_colorbar=False,
-        vmin=min(-ds.max(), ds.min()).values  # fix cases when min > 0
+        vmin=min(-ds.max(), ds.min()).values,  # fix cases when min > 0
     )
     p.axes.coastlines()
     p.axes.gridlines(color='black', alpha=0.5, linestyle='--')

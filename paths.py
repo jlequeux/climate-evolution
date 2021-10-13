@@ -2,9 +2,7 @@
 
 import pathlib
 
-ROOT = (
-    pathlib.Path(__file__).absolute().parent
-)
+ROOT = pathlib.Path(__file__).absolute().parent
 DATA_FOLDER = f'{ROOT}/data'
 CATALOG_FOLDER = f'{ROOT}/catalogs'
 CLIMATE_CATALOG = f'{CATALOG_FOLDER}/climate_catalog.yaml'

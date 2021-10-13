@@ -116,9 +116,9 @@ def temperature_anomalies():
     reference_tmp_map = historical_temperatures.sel(
         year=reference_year, method='nearest'
     )
-    #st.write(reference_tmp_map.year)
+    # st.write(reference_tmp_map.year)
     comparison_tmp_map = prediction_data.sel(year=comparison_year, method='nearest')
-    #st.write(comparison_tmp_map.year)
+    # st.write(comparison_tmp_map.year)
     sign = -1 if st.checkbox('Reverse difference') else 1
     anomaly_map = (sign * comparison_tmp_map) - (sign * reference_tmp_map)
 

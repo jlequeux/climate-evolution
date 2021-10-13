@@ -3,6 +3,7 @@ from loguru import logger
 import datetime
 import intake
 import pandas as pd
+import os
 
 import paths
 
@@ -63,6 +64,9 @@ def create_catalog(entries, filename):
 
 def build_climate_catalog(filename=paths.CLIMATE_CATALOG):
     """Create a catalog file"""
+    if os.path.exists(paths.CLIMATE_CATALOG):
+        logger.info(f'Existing Catalog: {filename}, continue without building.')
+        return
     catalog_content = []
     catalog_content.append(
         build_yearly_temperature_entry(OLDEST_DATE, NOW, 'historical', '0')

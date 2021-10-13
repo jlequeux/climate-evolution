@@ -7,7 +7,7 @@ run:
 	streamlit run climate.py
 
 build_catalog:
-	python3 -m dataset.py
+	python3 dataset.py
 
 format:
 	$(ALL_PYTHON_XARGS) python3 -m black -S

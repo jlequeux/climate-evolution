@@ -77,7 +77,7 @@ def climate_evolution_per_location():
     difference_now = tmp_now - tmp_past
     st.text(
         f'In {year_now.year} the {variable} is {difference_now:.02f}°C'
-        f'{"higher" if difference_now > 0 else "lower"} than in {year_past.year}'
+        f' {"higher" if difference_now > 0 else "lower"} than in {year_past.year}'
     )
 
     for rcp in RCPs:
@@ -85,7 +85,7 @@ def climate_evolution_per_location():
         year_futur = df.query(f'RCP == "{rcp}"').iloc[-1]['year']
         difference_futur = tmp_futur - tmp_now
         st.text(
-            f'With scenario RCP{rcp}: in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
+            f'With scenario RCP {rcp}: in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
             f' {"higher" if difference_futur > 0 else "lower"} compared to {year_now.year}'
         )
 
@@ -116,13 +116,14 @@ def temperature_anomalies():
     reference_tmp_map = historical_temperatures.sel(
         year=reference_year, method='nearest'
     )
+    #st.write(reference_tmp_map.year)
     comparison_tmp_map = prediction_data.sel(year=comparison_year, method='nearest')
-
+    #st.write(comparison_tmp_map.year)
     sign = -1 if st.checkbox('Reverse difference') else 1
-    anomaly_map = sign * comparison_tmp_map - sign * reference_tmp_map
+    anomaly_map = (sign * comparison_tmp_map) - (sign * reference_tmp_map)
 
     qualitative_coolwarm = plot.create_qualitative_from_linear('coolwarm', 12)
-    p = plot.map(
+    p = plot.color_map(
         anomaly_map['temperature'],
         label="Temperature anomalies(°C)",
         cmap=qualitative_coolwarm,

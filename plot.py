@@ -15,7 +15,7 @@ def create_qualitative_from_linear(cmap_name, size):
     return ListedColormap(cmap(a))
 
 
-def map(ds, label, cmap):
+def color_map(ds, label, cmap):
     """Plot a map with coastline from an xarray"""
     subplot_kws = dict(projection=ccrs.Robinson(), facecolor='grey')
 
@@ -24,6 +24,7 @@ def map(ds, label, cmap):
         cmap=cmap,
         subplot_kws=subplot_kws,
         add_colorbar=False,
+        vmin=min(-ds.max(), ds.min()).values  # fix cases when min > 0
     )
     p.axes.coastlines()
     p.axes.gridlines(color='black', alpha=0.5, linestyle='--')

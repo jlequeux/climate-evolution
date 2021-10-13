@@ -5,6 +5,7 @@ import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import altair as alt
 
+
 def create_qualitative_from_linear(cmap_name, size):
     """Generate a qualitative custom cmap from a linear one"""
     cmap = cm.get_cmap(cmap_name, int(256 / size) * size)
@@ -16,9 +17,14 @@ def create_qualitative_from_linear(cmap_name, size):
 
 def map(ds, label, cmap):
     """Plot a map with coastline from an xarray"""
-    subplot_kws=dict(projection=ccrs.Robinson(), facecolor='grey')
+    subplot_kws = dict(projection=ccrs.Robinson(), facecolor='grey')
 
-    p = ds.plot(transform=ccrs.PlateCarree(), cmap=cmap, subplot_kws=subplot_kws, add_colorbar=False)
+    p = ds.plot(
+        transform=ccrs.PlateCarree(),
+        cmap=cmap,
+        subplot_kws=subplot_kws,
+        add_colorbar=False,
+    )
     p.axes.coastlines()
     p.axes.gridlines(color='black', alpha=0.5, linestyle='--')
     p.figure.patch.set_alpha(0)
@@ -31,7 +37,6 @@ def map(ds, label, cmap):
     return p
 
 
-
 def line(df, variable, x='year', color_var='type'):
     """Line plot + trend of a dataframe variable using altair"""
     p = (
@@ -39,19 +44,20 @@ def line(df, variable, x='year', color_var='type'):
         .mark_line()
         .encode(
             alt.Y(variable, scale=alt.Scale(zero=False)),
-            x=x,)
+            x=x,
+        )
     )
-    trend = p.transform_regression(x, variable).mark_line(strokeDash=[2,1], color='steerblue')
+    trend = p.transform_regression(x, variable).mark_line(
+        strokeDash=[2, 1], color='steerblue'
+    )
     p = p.encode(
-        color=alt.Color(color_var, 
+        color=alt.Color(
+            color_var,
             scale=alt.Scale(
                 scheme='set2',
-                )
-            ), 
-        tooltip=[x, variable])
-    chart = (
-        (trend + p)
-        .interactive()
-        .properties(width=800)
+            ),
+        ),
+        tooltip=[x, variable],
     )
+    chart = (trend + p).interactive().properties(width=800)
     return chart

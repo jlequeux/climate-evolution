@@ -70,8 +70,8 @@ def climate_evolution_per_location():
 
     tmp_past = df.iloc[0][variable]
     year_past = df.iloc[0]['year']
-    tmp_now = df.query(f'RCP == "0"').iloc[-1][variable]
-    year_now = df.query(f'RCP == "0"').iloc[-1]['year']
+    tmp_now = df.query('RCP == "0"').iloc[-1][variable]
+    year_now = df.query('RCP == "0"').iloc[-1]['year']
     difference_now = tmp_now - tmp_past
     st.text(
         f'In {year_now.year} the {variable} is {difference_now:.02f}°C'

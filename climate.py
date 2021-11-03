@@ -83,7 +83,8 @@ def climate_evolution_per_location():
         year_futur = df.query(f'RCP == "{rcp}"').iloc[-1]['year']
         difference_futur = tmp_futur - tmp_now
         st.text(
-            f'With scenario RCP {rcp}: in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
+            f'With scenario RCP {rcp}: '
+            f'in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
             f' {"higher" if difference_futur > 0 else "lower"} compared to {year_now.year}'
         )
 

@@ -111,9 +111,7 @@ def temperature_anomalies():
         'Predictions from: ', prediction_data.year.values, index=pred_last_year_idx
     )
 
-    reference_tmp_map = historical_temperatures.sel(
-        year=reference_year, method='nearest'
-    )
+    reference_tmp_map = historical_temperatures.sel(year=reference_year, method='nearest')
     # st.write(reference_tmp_map.year)
     comparison_tmp_map = prediction_data.sel(year=comparison_year, method='nearest')
     # st.write(comparison_tmp_map.year)

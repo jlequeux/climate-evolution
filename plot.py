@@ -48,9 +48,7 @@ def line(df, variable, x='year', color_var='type'):
             x=x,
         )
     )
-    trend = p.transform_regression(x, variable).mark_line(
-        strokeDash=[2, 1], color='steerblue'
-    )
+    trend = p.transform_regression(x, variable).mark_line(strokeDash=[2, 1], color='steerblue')
     p = p.encode(
         color=alt.Color(
             color_var,

@@ -20,7 +20,7 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    - name: Run black
+    - name: black formatting
       run: |
         python -m pip install "black==20.8b1"
         black --version
@@ -28,5 +28,5 @@ jobs:
     - name: flake8 Lint
       uses: py-actions/flake8@v1
       with:
-        ignore: "E501", "W503"
+        ignore: "W503"
         max-line-length: "100"

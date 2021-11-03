@@ -1,16 +1,14 @@
-from logging import disable
-import streamlit as st
-
-import xarray as xr
-import pandas as pd
 import datetime
-import numpy as np
-import geopy
-from geopy.geocoders import Nominatim
-import intake
 
-import plot
+import geopy
+import intake
+import pandas as pd
+import streamlit as st
+import xarray as xr
+from geopy.geocoders import Nominatim
+
 import paths
+import plot
 
 GEOLOCATOR = Nominatim(user_agent="climate-evolution")
 

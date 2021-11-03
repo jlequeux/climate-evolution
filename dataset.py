@@ -1,10 +1,11 @@
 """Dataset and calalogs management"""
-from loguru import logger
 import datetime
+import os
+
 import intake
 import pandas as pd
-import os
 import yaml
+from loguru import logger
 
 import paths
 

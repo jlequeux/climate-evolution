@@ -1,9 +1,9 @@
-from matplotlib.colors import ListedColormap
-from matplotlib import cm
-import numpy as np
+import altair as alt
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
-import altair as alt
+import numpy as np
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
 
 
 def create_qualitative_from_linear(cmap_name, size):

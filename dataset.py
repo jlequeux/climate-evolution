@@ -2,69 +2,140 @@
 import datetime
 import os
 
+import cdsapi
 import intake
 import pandas as pd
+import pathlib
 import yaml
 from loguru import logger
+from decouple import config
+from prefect import task, Flow
+from typing import List, Tuple, Union, Dict
+import zipfile
+import xarray as xr
 
 import paths
 
-NOW = pd.to_datetime(f'{datetime.datetime.now().year}-01-01')
-OLDEST_DATE = pd.to_datetime('1950-01-01')
-FURTHER_DATE = pd.to_datetime('2100-12-01')
+CDS_CLIENT = cdsapi.Client(url=config('CDSAPI_URL'), key=config('CDSAPI_KEY'), verify=True)
 
 
-def build_yearly_temperature_entry(start_date, end_date, name, rcp):
-    """Build and cut dataset between start_date and end_date for a particular RCP
-    convert to Celcius, save it to zarr and return the catalog entry as a string"""
-    catalog = intake.open_catalog(paths.ECMWF_CATALOG)
+@task
+def download_cmip6(experiment, temporal_resolution, level, variable, model, file_format='zip', force=False) -> pathlib.PosixPath:
+    """Request CMIP6 data from ECMWF and save it locally"""
+    filename = f'{experiment}_{temporal_resolution}_{level}_{variable}_{model}.{file_format}'
+    path = pathlib.Path(paths.DATA_FOLDER, file_format, filename)
+    if path.exists() and not force:
+        logger.info(f'Existing file: {path}')
+        return path
+    os.makedirs(path.parent, exist_ok=True)
+    logger.info(f'Retrieving {filename}')
+    CDS_CLIENT.retrieve(
+        'projections-cmip6',
+        {
+            'format': file_format,
+            'temporal_resolution': temporal_resolution,
+            'experiment': experiment,
+            'level': level,
+            'variable': variable,
+            'model': model,
+        },
+        path.as_posix())
+    return path
 
-    query_rcp = rcp
-    if rcp == '0':
-        query_rcp = (
-            '4.5'  # get 4.5 by default for historical data - both historical data are the same
-        )
 
-    ecmwf_ds = catalog[f'ecmwf_temperature_rcp{query_rcp}'].read()
-    ds = ecmwf_ds.where((ecmwf_ds.time > start_date) & (ecmwf_ds.time < end_date), drop=True)
+@task
+def extract_nc(path: Union[str, pathlib.PosixPath]) -> Tuple[pathlib.PosixPath]:
+    """Extract .nc files from archive and save them"""
+    extracted_files = []
+    with zipfile.ZipFile(path, 'r') as zip_file:
+        file_list = [pathlib.Path(f.filename) for f in zip_file.filelist]
+        nc_files = list(filter(lambda x: x.suffix == '.nc', file_list))
+        for file in nc_files:
+            target_path = os.path.join(paths.DATA_FOLDER, 'nc')
+            zip_file.extract(file.as_posix(), target_path)
+            logger.info(f'File {file} extracted at {target_path} ')
+            extracted_files.append(pathlib.Path(target_path, file.name))   
+    return tuple(extracted_files)
+  
+    
+@task
+def build_zarr(nc_paths: List[pathlib.PosixPath], name: str) -> pathlib.PosixPath:
+    """Build and format a dataset from a list of nc files"""
+    target_path = pathlib.Path(paths.DATA_FOLDER, 'zarr', f'{name}.zarr')
+    if target_path.exists():
+        logger.info(f'Existing zarr: {target_path}')
+        return target_path
 
-    ds = ds.rename_vars({'temperature_monthly-mean': 'temperature'})
-    ds['temperature'] = ds['temperature'] - 273.15
-    ds = ds.assign_coords({'RCP': [rcp]})  # replace rcp for historical data
+    def open_nc(path: pathlib.PosixPath) -> xr.Dataset:
+        ds = xr.open_dataset(path)
+        variable_name = path.stem.split('_')[0]
+        standard_name = ds[variable_name].attrs["standard_name"]
+        ds = ds[variable_name].rename(standard_name).to_dataset()
+        return ds
+    
+    ds = xr.merge([open_nc(nc_path) for nc_path in nc_paths])
+    ds = ds.rename({'lat': 'latitude', 'lon': 'longitude'})
+    ds = ds.assign_coords({'longitude': (ds.longitude + 180) % 360 - 180})  # convert to long3
+    ds = ds.sortby('longitude')
+    
+    ds.to_zarr(target_path)
+    logger.info(f'Dataset {name} saved at {target_path}.')
+    return target_path
 
-    ds = ds.groupby('time.year').mean()
-    path = f'{paths.DATA_FOLDER}/temperature_{rcp}_{start_date:%Y%d%m}_{end_date:%Y%d%m}.zarr'
-    ds.to_zarr(path, mode='w')
-    logger.info(f'dataset {path} saved')
 
-    content = intake.open_zarr(path)
+@task
+def entry_from_zarr(path: pathlib.PosixPath, name: str, description: str) -> dict:
+    """Returns the yaml description for intake catalog for a given zarr file"""
+    content = intake.open_zarr(path.as_posix())
     content.name = name
-    content.description = f'{name} temperature from {start_date:%Y%d%m} to {end_date:%Y%d%m}'
-
+    content.description = description
     return yaml.safe_load(content.yaml())['sources']
 
 
-def create_catalog(entries, filename):
+@task
+def create_catalog(entries: list, filename: str) -> None:
+    """Create intake catalog file"""
+    content = {k:v for e in entries for (k,v) in e.items()}
+    # TODO(jeremie): check if each entry is valid
     catalog_content = {'sources': entries}
     with open(filename, 'w') as file:
         yaml.dump(catalog_content, file)
+    logger.info(f'Catalog created at {filename}')
+        
+        
+def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
+    """Create ECMWF catalog file.
+    Structure: 1 zarr per `experiment`, with several variables inside
+    """
+    
+    experiments = ['historical', 'ssp1_2_6', 'ssp2_4_5', 'ssp3_7_0', 'ssp5_8_5']
+    variables = ['near_surface_air_temperature', 'sea_surface_height_above_geoid', 'precipitation']
+    temporal_resolution  = 'monthly'
+    level = 'single_levels'
+    model = 'cnrm_cm6_1_hr'
+    
+    catalog_entries = []
+    for experiment in experiments:
+        nc_paths = []
+        for variable in variables:
+            zip_path = download_cmip6(experiment, temporal_resolution, level, variable, model)
+            nc_paths.extend(extract_nc(zip_path))
+        zarr_path = build_zarr(nc_paths, experiment)
+
+        description = (f'{experiment} {temporal_resolution} {level} data from ECMWF CMIP6 {model} model'
+                       f'with variables: {"/".join(variables)}')
+        catalog_entries.append(entry_from_zarr(
+            zarr_path, name=experiment, description=description))
+    create_catalog(catalog_entries, path)
 
 
-def build_climate_catalog(filename=paths.CLIMATE_CATALOG):
-    """Create a catalog file"""
-    if os.path.exists(paths.CLIMATE_CATALOG):
-        logger.info(f'Existing Catalog: {filename}, continue without building.')
-        return
-    catalog_content = {}
-    catalog_content.update(build_yearly_temperature_entry(OLDEST_DATE, NOW, 'historical', '0'))
-    for rcp in ['4.5', '8.5']:
-        catalog_content.update(
-            build_yearly_temperature_entry(NOW, FURTHER_DATE, f'prediction RCP {rcp}', rcp)
-        )
-
-    create_catalog(catalog_content, filename)
-    logger.info(f'Catalog {filename} created')
+def open_dataset(experiment, catalog_path=paths.ECMWF_CMIP6_CATALOG):
+    """Open a dataset from a catalog"""
+    catalog = intake.open_catalog(catalog_path)
+    return catalog[experiment].read()
 
 
 if __name__ == '__main__':
-    build_climate_catalog()
+    with Flow("building-catalogs") as flow:
+        build_ecmwf_cmip6_catalog()
+    flow.run()

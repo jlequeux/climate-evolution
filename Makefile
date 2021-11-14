@@ -3,8 +3,10 @@ PWD=$(shell pwd)
 
 .PHONY: run
 
-run:
+download_data: 
 	python3 dataset.py
+
+run:
 	streamlit run climate.py
 
 format:
@@ -14,3 +16,4 @@ format:
 		--remove-unused-variables \
 		--remove-all-unused-imports
 	$(ALL_PYTHON_XARGS) python3 -m isort
+	$(ALL_PYTHON_XARGS) python3 -m flake8

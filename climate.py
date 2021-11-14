@@ -40,6 +40,7 @@ def get_location(query):
 def climate_evolution_per_location():
     """Show temperature evolution for a location"""
     # TODO(jeremie): add other variables
+    ds = get_dataset()
     variable = 'temperature'
 
     query = st.text_input('Enter you city or country')

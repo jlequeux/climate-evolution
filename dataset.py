@@ -68,10 +68,13 @@ def build_zarr(nc_paths: List[pathlib.PosixPath], name: str) -> pathlib.PosixPat
 
     def open_nc(path: pathlib.PosixPath) -> xr.Dataset:
         ds = xr.open_dataset(path)
-        variable_name = path.stem.split('_')[0]
-        standard_name = ds[variable_name].attrs["standard_name"]
-        ds = ds[variable_name].rename(standard_name).to_dataset()
-        return ds
+        variable = ds.attrs['variable_id']
+        experiment = ds.attrs['experiment_id']
+        # standard_name = ds[variable].attrs['standard_name']
+        
+        # ds = ds.assign_coords({'experiment': experiment}).expand_dims('experiment')
+        da = ds[variable].rename(experiment)
+        return da
     
     ds = xr.merge([open_nc(nc_path) for nc_path in nc_paths])
     ds = ds.rename({'lat': 'latitude', 'lon': 'longitude'})
@@ -79,6 +82,7 @@ def build_zarr(nc_paths: List[pathlib.PosixPath], name: str) -> pathlib.PosixPat
     ds = ds.sortby('longitude')
     
     ds.to_zarr(target_path)
+    ds.close()
     logger.info(f'Dataset {name} saved at {target_path}.')
     return target_path
 
@@ -89,7 +93,8 @@ def entry_from_zarr(path: pathlib.PosixPath, name: str, description: str) -> dic
     content = intake.open_zarr(path.as_posix())
     content.name = name
     content.description = description
-    return yaml.safe_load(content.yaml())['sources']
+    res = yaml.safe_load(content.yaml())['sources']
+    return res
 
 
 @task
@@ -97,11 +102,11 @@ def create_catalog(entries: list, filename: str) -> None:
     """Create intake catalog file"""
     content = {k:v for e in entries for (k,v) in e.items()}
     # TODO(jeremie): check if each entry is valid
-    catalog_content = {'sources': entries}
+    catalog_content = {'sources': content}
+    logger.info(catalog_content)
     with open(filename, 'w') as file:
         yaml.dump(catalog_content, file)
     logger.info(f'Catalog created at {filename}')
-        
         
 def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
     """Create ECMWF catalog file.
@@ -115,17 +120,17 @@ def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
     model = 'cnrm_cm6_1_hr'
     
     catalog_entries = []
-    for experiment in experiments:
+    for variable in variables:
         nc_paths = []
-        for variable in variables:
+        for experiment in experiments:
             zip_path = download_cmip6(experiment, temporal_resolution, level, variable, model)
             nc_paths.extend(extract_nc(zip_path))
-        zarr_path = build_zarr(nc_paths, experiment)
+        
+        zarr_name = f'{temporal_resolution}_{level}_{variable}_{model}_{"-".join(experiments)}'
+        description = (f'ECMWF CMIP6 data: {zarr_name}')
 
-        description = (f'{experiment} {temporal_resolution} {level} data from ECMWF CMIP6 {model} model'
-                       f'with variables: {"/".join(variables)}')
-        catalog_entries.append(entry_from_zarr(
-            zarr_path, name=experiment, description=description))
+        zarr_path = build_zarr(nc_paths, zarr_name)
+        catalog_entries.append(entry_from_zarr(zarr_path, variable, description))
     create_catalog(catalog_entries, path)
 
 

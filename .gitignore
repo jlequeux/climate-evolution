@@ -12,6 +12,7 @@ notebooks/
 
 # keys
 .cdsapi
+.env
 
 # MacOS
 .DS_Store

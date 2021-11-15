@@ -38,32 +38,35 @@ def climate_evolution_per_location():
     if not location:
         return
     st.text(f"showing data for {location.address}")
-    
+
     ds = catalog[variable].read()
     rolling = st.slider('Rolling window (years)', min_value=1, max_value=10)
     scenarios = st.multiselect('Scenarios', list(ds.data_vars), list(ds.data_vars))
-    
+
     ds = (
-            ds
-            .sel(latitude=location.latitude, longitude=location.longitude, method="nearest")
-            .rolling(time=rolling)
-            .mean()
-        )
+        ds.sel(latitude=location.latitude, longitude=location.longitude, method="nearest")
+        .rolling(time=rolling)
+        .mean()
+    )
     df = ds.to_dataframe()[scenarios]
     column_name = 'scenarios'
     df = df.stack().to_frame(variable).reset_index().rename(columns={'level_1': column_name})
     df = df.sort_values('time', ascending=True)
 
     _min = df.time.min().year
-    _max =df.time.max().year
+    _max = df.time.max().year
     date_range = st.slider('Date range:', _min, _max, (_min, _max))
-    df = df.where((df.time >= pd.to_datetime(date_range[0], format='%Y'))
-                   & (df.time <= pd.to_datetime(date_range[1], format='%Y'))
-                  ).dropna()
-    
+    df = df.where(
+        (df.time >= pd.to_datetime(date_range[0], format='%Y'))
+        & (df.time <= pd.to_datetime(date_range[1], format='%Y'))
+    ).dropna()
+
     st.altair_chart(plot.line(df, variable, color_var=column_name))
 
-    st.write('More details on SSP scenarios: https://en.wikipedia.org/wiki/Shared_Socioeconomic_Pathways')
+    st.write(
+        'More details on SSP scenarios: https://en.wikipedia.org/wiki/Shared_Socioeconomic_Pathways'
+    )
+
 
 def temperature_anomalies():
     """Show temperature anomalies between 2 dates"""

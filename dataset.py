@@ -59,21 +59,25 @@ def extract_nc(path: Union[str, pathlib.PosixPath]) -> Tuple[pathlib.PosixPath]:
   
     
 @task
-def build_zarr(nc_paths: List[pathlib.PosixPath], name: str) -> pathlib.PosixPath:
+def build_zarr(nc_paths: List[pathlib.PosixPath], name: str, resample: str = 'Y') -> pathlib.PosixPath:
     """Build and format a dataset from a list of nc files"""
     target_path = pathlib.Path(paths.DATA_FOLDER, 'zarr', f'{name}.zarr')
     if target_path.exists():
         logger.info(f'Existing zarr: {target_path}')
         return target_path
 
-    def open_nc(path: pathlib.PosixPath) -> xr.Dataset:
+    def open_nc(path: pathlib.PosixPath, resample: str = 'Y') -> xr.Dataset:
         ds = xr.open_dataset(path)
         variable = ds.attrs['variable_id']
         experiment = ds.attrs['experiment_id']
-        # standard_name = ds[variable].attrs['standard_name']
+        unit = ds[variable].attrs['units']
         
-        # ds = ds.assign_coords({'experiment': experiment}).expand_dims('experiment')
         da = ds[variable].rename(experiment)
+        da = da.resample({'time': resample}).mean()
+        
+        if unit == 'K':
+            da = da - 273.15
+        
         return da
     
     ds = xr.merge([open_nc(nc_path) for nc_path in nc_paths])
@@ -114,10 +118,11 @@ def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
     """
     
     experiments = ['historical', 'ssp1_2_6', 'ssp2_4_5', 'ssp3_7_0', 'ssp5_8_5']
-    variables = ['near_surface_air_temperature', 'sea_surface_height_above_geoid', 'precipitation']
+    variables = ['near_surface_air_temperature'] #, 'sea_surface_height_above_geoid', 'precipitation']
     temporal_resolution  = 'monthly'
     level = 'single_levels'
     model = 'cnrm_cm6_1_hr'
+    resample = 'Y'
     
     catalog_entries = []
     for variable in variables:
@@ -125,11 +130,11 @@ def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
         for experiment in experiments:
             zip_path = download_cmip6(experiment, temporal_resolution, level, variable, model)
             nc_paths.extend(extract_nc(zip_path))
-        
-        zarr_name = f'{temporal_resolution}_{level}_{variable}_{model}_{"-".join(experiments)}'
+
+        zarr_name = f'{temporal_resolution}_{resample}_{level}_{variable}_{model}_{"-".join(experiments)}'
         description = (f'ECMWF CMIP6 data: {zarr_name}')
 
-        zarr_path = build_zarr(nc_paths, zarr_name)
+        zarr_path = build_zarr(nc_paths, zarr_name, resample)
         catalog_entries.append(entry_from_zarr(zarr_path, variable, description))
     create_catalog(catalog_entries, path)
 

@@ -38,7 +38,7 @@ def color_map(ds, label, cmap):
     return p
 
 
-def line(df, variable, x='year', color_var='type'):
+def line(df, variable, x='time', color_var='variable'):
     """Line plot + trend of a dataframe variable using altair"""
     p = (
         alt.Chart(df)

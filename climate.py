@@ -13,18 +13,9 @@ import plot
 GEOLOCATOR = Nominatim(user_agent="climate-evolution")
 
 
-VARIABLES = ['temperature', 'precipitation']
+# VARIABLES = ['temperature', 'precipitation']
 YEAR_NOW = datetime.datetime.now().year
-RCPs = ['4.5', '8.5']
-
-
-def get_dataset():
-    """Get and concatenate datasets from the catalog"""
-    catalog = intake.open_catalog(paths.CLIMATE_CATALOG)
-    arrays = []
-    arrays.append(catalog['historical'].read())
-    _ = [arrays.append(catalog[f'prediction RCP {rcp}'].read()) for rcp in RCPs]
-    return xr.concat(arrays, 'RCP')
+# RCPs = ['4.5', '8.5']
 
 
 def get_location(query):
@@ -39,56 +30,40 @@ def get_location(query):
 
 def climate_evolution_per_location():
     """Show temperature evolution for a location"""
-    # TODO(jeremie): add other variables
-    ds = get_dataset()
-    variable = 'temperature'
+    catalog = intake.open_catalog(paths.ECMWF_CMIP6_CATALOG)
+    variable = st.selectbox('Variable', list(catalog))
 
     query = st.text_input('Enter you city or country')
     location = get_location(query)
     if not location:
         return
-
-    st.text(f"showing {variable} for {location.address}")
+    st.text(f"showing data for {location.address}")
+    
+    ds = catalog[variable].read()
     rolling = st.slider('Rolling window (years)', min_value=1, max_value=10)
-
-    ds_location = (
-        get_dataset()
-        .sel(latitude=location.latitude, longitude=location.longitude, method="nearest")
-        .rolling(year=rolling)
-        .mean()
-    )
-    df = ds_location.to_dataframe().reset_index()
-
-    df.loc[df['RCP'] == '0', 'type'] = 'historical'
-    for rcp in RCPs:
-        df.loc[df['RCP'] == rcp, 'type'] = f'prediction - RCP {rcp}'
-
-    df = df.dropna()
-    df['year'] = pd.to_datetime(df['year'], format='%Y')
-    df = df.sort_values('year', ascending=True)
-
-    st.altair_chart(plot.line(df, variable))
-
-    tmp_past = df.iloc[0][variable]
-    year_past = df.iloc[0]['year']
-    tmp_now = df.query('RCP == "0"').iloc[-1][variable]
-    year_now = df.query('RCP == "0"').iloc[-1]['year']
-    difference_now = tmp_now - tmp_past
-    st.text(
-        f'In {year_now.year} the {variable} is {difference_now:.02f}°C'
-        f' {"higher" if difference_now > 0 else "lower"} than in {year_past.year}'
-    )
-
-    for rcp in RCPs:
-        tmp_futur = df.query(f'RCP == "{rcp}"').iloc[-1][variable]
-        year_futur = df.query(f'RCP == "{rcp}"').iloc[-1]['year']
-        difference_futur = tmp_futur - tmp_now
-        st.text(
-            f'With scenario RCP {rcp}: '
-            f'in {year_futur.year} the {variable} will be {difference_futur:.02f}°C'
-            f' {"higher" if difference_futur > 0 else "lower"} compared to {year_now.year}'
+    scenarios = st.multiselect('Scenarios', list(ds.data_vars), list(ds.data_vars))
+    
+    ds = (
+            ds
+            .sel(latitude=location.latitude, longitude=location.longitude, method="nearest")
+            .rolling(time=rolling)
+            .mean()
         )
+    df = ds.to_dataframe()[scenarios]
+    column_name = 'scenarios'
+    df = df.stack().to_frame(variable).reset_index().rename(columns={'level_1': column_name})
+    df = df.sort_values('time', ascending=True)
 
+    _min = df.time.min().year
+    _max =df.time.max().year
+    date_range = st.slider('Date range:', _min, _max, (_min, _max))
+    df = df.where((df.time >= pd.to_datetime(date_range[0], format='%Y'))
+                   & (df.time <= pd.to_datetime(date_range[1], format='%Y'))
+                  ).dropna()
+    
+    st.altair_chart(plot.line(df, variable, color_var=column_name))
+
+    st.write('More details on SSP scenarios: https://en.wikipedia.org/wiki/Shared_Socioeconomic_Pathways')
 
 def temperature_anomalies():
     """Show temperature anomalies between 2 dates"""

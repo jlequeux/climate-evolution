@@ -1,4 +1,5 @@
 """Dataset and calalogs management"""
+import datetime
 import os
 import pathlib
 import zipfile
@@ -17,7 +18,7 @@ import paths
 CDS_CLIENT = cdsapi.Client(url=config('CDSAPI_URL'), key=config('CDSAPI_KEY'), verify=True)
 
 
-@task
+@task(max_retries=3, retry_delay=datetime.timedelta(minutes=5))
 def download_cmip6(
     experiment, temporal_resolution, level, variable, model, file_format='zip', force=False
 ) -> pathlib.PosixPath:
@@ -122,7 +123,7 @@ def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
     """
 
     experiments = ['historical', 'ssp1_2_6', 'ssp2_4_5', 'ssp3_7_0', 'ssp5_8_5']
-    variables = ['near_surface_air_temperature', 'sea_surface_height_above_geoid', 'precipitation']
+    variables = ['near_surface_air_temperature', 'precipitation']
     temporal_resolution = 'monthly'
     level = 'single_levels'
     model = 'cnrm_cm6_1_hr'

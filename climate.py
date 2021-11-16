@@ -87,6 +87,7 @@ def spatial_anomalies():
     with st.expander("Spatial selection"):
         query = st.text_input('Enter you city or country')
         location = get_location(query)
+
         if not location:
             st.write('or select lat/lon manually')
             col3, col4 = st.columns(2)
@@ -95,18 +96,23 @@ def spatial_anomalies():
             latitudes = col3.slider('Latitudes', *min_max_lats, min_max_lats)
             longitudes = col4.slider('Longitudes', *min_max_lons, min_max_lons)
         else:
-            lat_s, lat_n, lon_w, lon_e = location.raw['boundingbox']
-            latitudes = (float(lat_s), float(lat_n))
-            longitudes = (float(lon_w), float(lon_e))
+            lat_s, lat_n, lon_w, lon_e = [float(x) for x in location.raw['boundingbox']]
+            lat_resolution = np.round(ds.latitude[1] - ds.latitude[0], 3)
+            lon_resolution = np.round(ds.longitude[1] - ds.longitude[0], 3)
+            if (lat_n - lat_s) < lat_resolution or (lon_e - lon_w) < lon_resolution:
+                st.error(f'Area "{location.address}" is too small')
+                return
+            latitudes = (lat_s, lat_n)
+            longitudes = (lon_w, lon_e)
 
     reference_map = (
         ds['historical']
-        .sel(time=pd.to_datetime(f'{reference_year}-12-31'), method='nearest')
+        .sel(time=pd.to_datetime(f'{reference_year}-12-31'), method='ffill')
         .sel(latitude=slice(*latitudes), longitude=slice(*longitudes))
     )
     comparison_map = (
         ds[scenario]
-        .sel(time=pd.to_datetime(f'{comparison_year}-12-31'), method='nearest')
+        .sel(time=pd.to_datetime(f'{comparison_year}-12-31'), method='backfill')
         .sel(latitude=slice(*latitudes), longitude=slice(*longitudes))
     )
 
@@ -120,7 +126,7 @@ def spatial_anomalies():
     qualitative_coolwarm = plot.create_qualitative_from_linear(colormap, 12)
     p = plot.color_map(
         anomaly_map,
-        label="label",
+        label=variable,
         cmap=qualitative_coolwarm,
     )
     st.pyplot(p.figure)

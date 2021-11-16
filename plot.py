@@ -5,6 +5,21 @@ import numpy as np
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
 
+DIVERGING_CMAPS = [
+    'PiYG',
+    'PRGn',
+    'BrBG',
+    'PuOr',
+    'RdGy',
+    'RdBu',
+    'RdYlBu',
+    'RdYlGn',
+    'Spectral',
+    'coolwarm',
+    'bwr',
+    'seismic',
+]
+
 
 def create_qualitative_from_linear(cmap_name, size):
     """Generate a qualitative custom cmap from a linear one"""

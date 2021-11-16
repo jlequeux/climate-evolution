@@ -1,21 +1,14 @@
-import datetime
-
 import geopy
 import intake
+import numpy as np
 import pandas as pd
 import streamlit as st
-import xarray as xr
 from geopy.geocoders import Nominatim
 
 import paths
 import plot
 
 GEOLOCATOR = Nominatim(user_agent="climate-evolution")
-
-
-# VARIABLES = ['temperature', 'precipitation']
-YEAR_NOW = datetime.datetime.now().year
-# RCPs = ['4.5', '8.5']
 
 
 def get_location(query):
@@ -29,7 +22,7 @@ def get_location(query):
 
 
 def climate_evolution_per_location():
-    """Show temperature evolution for a location"""
+    """Show variable evolution for a location"""
     catalog = intake.open_catalog(paths.ECMWF_CMIP6_CATALOG)
     variable = st.selectbox('Variable', list(catalog))
 
@@ -68,49 +61,74 @@ def climate_evolution_per_location():
     )
 
 
-def temperature_anomalies():
+def get_years_range(ds):
+    ds = ds.dropna('time')
+    _min = pd.to_datetime(ds.time.min().values).year
+    _max = pd.to_datetime(ds.time.max().values).year
+    return (_min, _max)
+
+
+def spatial_anomalies():
     """Show temperature anomalies between 2 dates"""
 
-    # TODO(jeremie): add spatial selection
-    catalog = intake.open_catalog(paths.CLIMATE_CATALOG)
-    historical_temperatures = catalog['historical'].read()
+    catalog = intake.open_catalog(paths.ECMWF_CMIP6_CATALOG)
+    variable = st.selectbox('Variable', list(catalog))
+    ds = catalog[variable].read()
 
-    st.text('Show temperature anomalies between:')
-
-    hist_last_year_idx = len(historical_temperatures.year.values) - 1
-    reference_year = st.selectbox(
-        'Historical data from: ',
-        historical_temperatures.year.values,
-        index=hist_last_year_idx,
+    scenario = st.selectbox('Scenario', list(ds.data_vars), 1)
+    col1, col2 = st.columns(2)
+    reference_year = col1.slider(
+        'Reference date (historical data)', *get_years_range(ds['historical'])
+    )
+    comparison_year = col2.slider(
+        'Comparison date (data from selected Scenario)', *get_years_range(ds[scenario])
     )
 
-    rcp_model = st.selectbox('RCP model', RCPs)
-    prediction_data = catalog[f'prediction RCP {rcp_model}'].read()
-    pred_last_year_idx = len(prediction_data.year.values) - 1
-    comparison_year = st.selectbox(
-        'Predictions from: ', prediction_data.year.values, index=pred_last_year_idx
+    with st.expander("Spatial selection"):
+        query = st.text_input('Enter you city or country')
+        location = get_location(query)
+        if not location:
+            st.write('or select lat/lon manually')
+            col3, col4 = st.columns(2)
+            min_max_lats = (np.asscalar(ds.latitude.min()), np.asscalar(ds.latitude.max()))
+            min_max_lons = (np.asscalar(ds.longitude.min()), np.asscalar(ds.longitude.max()))
+            latitudes = col3.slider('Latitudes', *min_max_lats, min_max_lats)
+            longitudes = col4.slider('Longitudes', *min_max_lons, min_max_lons)
+        else:
+            lat_s, lat_n, lon_w, lon_e = location.raw['boundingbox']
+            latitudes = (float(lat_s), float(lat_n))
+            longitudes = (float(lon_w), float(lon_e))
+
+    reference_map = (
+        ds['historical']
+        .sel(time=pd.to_datetime(f'{reference_year}-12-31'), method='nearest')
+        .sel(latitude=slice(*latitudes), longitude=slice(*longitudes))
+    )
+    comparison_map = (
+        ds[scenario]
+        .sel(time=pd.to_datetime(f'{comparison_year}-12-31'), method='nearest')
+        .sel(latitude=slice(*latitudes), longitude=slice(*longitudes))
     )
 
-    reference_tmp_map = historical_temperatures.sel(year=reference_year, method='nearest')
-    # st.write(reference_tmp_map.year)
-    comparison_tmp_map = prediction_data.sel(year=comparison_year, method='nearest')
-    # st.write(comparison_tmp_map.year)
-    sign = -1 if st.checkbox('Reverse difference') else 1
-    anomaly_map = (sign * comparison_tmp_map) - (sign * reference_tmp_map)
+    with st.expander("Color settings"):
+        sign = -1 if st.checkbox('Reverse difference') else 1
+        colormap = st.selectbox('Colormap', plot.DIVERGING_CMAPS, 9)
 
-    qualitative_coolwarm = plot.create_qualitative_from_linear('coolwarm', 12)
+    st.subheader(f'Showing anomalies between {reference_year} and {comparison_year}')
+
+    anomaly_map = (sign * comparison_map) - (sign * reference_map)
+    qualitative_coolwarm = plot.create_qualitative_from_linear(colormap, 12)
     p = plot.color_map(
-        anomaly_map['temperature'],
-        label="Temperature anomalies(°C)",
+        anomaly_map,
+        label="label",
         cmap=qualitative_coolwarm,
     )
-
     st.pyplot(p.figure)
 
 
 OPTIONS = {
-    'Temperature evolution at your location': climate_evolution_per_location,
-    'Map of temperature anomalies': temperature_anomalies,
+    'Climate evolution at your location': climate_evolution_per_location,
+    'Map of anomalies': spatial_anomalies,
 }
 
 

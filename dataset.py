@@ -1,18 +1,16 @@
 """Dataset and calalogs management"""
-import datetime
 import os
+import pathlib
+import zipfile
+from typing import List, Tuple, Union
 
 import cdsapi
 import intake
-import pandas as pd
-import pathlib
-import yaml
-from loguru import logger
-from decouple import config
-from prefect import task, Flow
-from typing import List, Tuple, Union, Dict
-import zipfile
 import xarray as xr
+import yaml
+from decouple import config
+from loguru import logger
+from prefect import Flow, task
 
 import paths
 
@@ -124,9 +122,7 @@ def build_ecmwf_cmip6_catalog(path=paths.ECMWF_CMIP6_CATALOG):
     """
 
     experiments = ['historical', 'ssp1_2_6', 'ssp2_4_5', 'ssp3_7_0', 'ssp5_8_5']
-    variables = [
-        'near_surface_air_temperature'
-    ]  # , 'sea_surface_height_above_geoid', 'precipitation']
+    variables = ['near_surface_air_temperature', 'sea_surface_height_above_geoid', 'precipitation']
     temporal_resolution = 'monthly'
     level = 'single_levels'
     model = 'cnrm_cm6_1_hr'

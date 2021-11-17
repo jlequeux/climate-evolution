@@ -91,8 +91,8 @@ def spatial_anomalies():
         if not location:
             st.write('or select lat/lon manually')
             col3, col4 = st.columns(2)
-            min_max_lats = (np.asscalar(ds.latitude.min()), np.asscalar(ds.latitude.max()))
-            min_max_lons = (np.asscalar(ds.longitude.min()), np.asscalar(ds.longitude.max()))
+            min_max_lats = (ds.latitude.min().item(), ds.latitude.max().item())
+            min_max_lons = (ds.longitude.min().item(), ds.longitude.max().item())
             latitudes = col3.slider('Latitudes', *min_max_lats, min_max_lats)
             longitudes = col4.slider('Longitudes', *min_max_lons, min_max_lons)
         else:

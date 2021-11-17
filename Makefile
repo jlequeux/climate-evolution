@@ -3,11 +3,11 @@ PWD=$(shell pwd)
 
 .PHONY: run
 
-download_data: 
+download_data:
 	python3 dataset.py
 
 run:
-	streamlit run climate.py
+	streamlit run climate.py --server.port 8080
 
 format:
 	$(ALL_PYTHON_XARGS) python3 -m black -S

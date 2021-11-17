@@ -13,5 +13,8 @@ Demo available at [climate-evolution.freeboxos.fr](http://climate-evolution.free
 
 ## How to build and run
 
-```make download_data```
+### Download requiered data
+ ```make download_data```
+
+### Run the service
 ```make run```

@@ -20,9 +20,27 @@ CDS_CLIENT = cdsapi.Client(url=config('CDSAPI_URL'), key=config('CDSAPI_KEY'), v
 
 @task(max_retries=3, retry_delay=datetime.timedelta(minutes=5))
 def download_cmip6(
-    experiment, temporal_resolution, level, variable, model, file_format='zip', force=False
+    experiment: str, temporal_resolution: str, level: str, variable: str, model: str, file_format='zip', force=False
 ) -> pathlib.PosixPath:
-    """Request CMIP6 data from ECMWF and save it locally"""
+    """Request CMIP6 data from ECMWF and save it locally
+    
+    Parameters
+    ----------
+    experiment: str
+        name of the experiment (`historical` or a valid SSP Scenario)
+    temporal_resolution: str
+        a valid temporal resolution (monthly, yearly)
+    level: str
+        single_level or pressure_level
+    variable: str
+        the variable to get
+    model: str
+        name of the CMIP6 model
+    file_format: str
+        the returned file format (zip)
+    force: bool
+        overwrite existing file if True
+    """
     filename = f'{experiment}_{temporal_resolution}_{level}_{variable}_{model}.{file_format}'
     path = pathlib.Path(paths.DATA_FOLDER, file_format, filename)
     if path.exists() and not force:
@@ -51,7 +69,7 @@ def extract_nc(path: Union[str, pathlib.PosixPath]) -> Tuple[pathlib.PosixPath]:
     extracted_files = []
     with zipfile.ZipFile(path, 'r') as zip_file:
         file_list = [pathlib.Path(f.filename) for f in zip_file.filelist]
-        nc_files = list(filter(lambda x: x.suffix == '.nc', file_list))
+        nc_files = filter(lambda x: x.suffix == '.nc', file_list)
         for file in nc_files:
             target_path = os.path.join(paths.DATA_FOLDER, 'nc')
             zip_file.extract(file.as_posix(), target_path)

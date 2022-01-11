@@ -11,7 +11,8 @@ import plot
 GEOLOCATOR = Nominatim(user_agent="climate-evolution")
 
 
-def get_location(query):
+def get_location(query: str):
+    """Get location information from string"""
     if not query:
         return False
     try:
@@ -46,12 +47,10 @@ def climate_evolution_per_location():
     df = df.stack().to_frame(variable).reset_index().rename(columns={'level_1': column_name})
     df = df.sort_values('time', ascending=True)
 
-    _min = df.time.min().year
-    _max = df.time.max().year
-    date_range = st.slider('Date range:', _min, _max, (_min, _max))
+    year_min, year_max = df.time.min().year, df.time.max().year
+    start, end = st.slider('Date range:', year_min, year_max, (year_min, year_max))
     df = df.where(
-        (df.time >= pd.to_datetime(date_range[0], format='%Y'))
-        & (df.time <= pd.to_datetime(date_range[1], format='%Y'))
+        (df.time.dt.year >= start) & (df.time.dt.year <= end)
     ).dropna()
 
     st.altair_chart(plot.line(df, variable, color_var=column_name))

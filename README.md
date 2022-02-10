@@ -7,10 +7,6 @@ Visualize Climate evolution in your area from 1850 to 2100
 
 This project is based on [ECMWF CMIP6 data](https://pcmdi.llnl.gov/CMIP6/)
 
-## Demo
-
-Demo available at [climate-evolution.freeboxos.fr](http://climate-evolution.freeboxos.fr/)
-
 ## How to build and run
 
 ### Download requiered data
